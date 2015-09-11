@@ -19,15 +19,11 @@ package imageproxy // import "willnorris.com/go/imageproxy"
 import (
 	"bufio"
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -145,79 +141,6 @@ func copyHeader(w http.ResponseWriter, r *http.Response, header string) {
 	if value, ok := r.Header[key]; ok {
 		w.Header()[key] = value
 	}
-}
-
-// allowed returns whether the specified request is allowed because it matches
-// a host in the proxy whitelist or it has a valid signature.
-func (p *Proxy) allowed(r *Request) bool {
-	if len(p.Referrers) > 0 && !validReferrer(p.Referrers, r.Original) {
-		glog.Infof("request not coming from allowed referrer: %v", r)
-		return false
-	}
-
-	if len(p.Whitelist) == 0 && len(p.SignatureKey) == 0 {
-		return true // no whitelist or signature key, all requests accepted
-	}
-
-	if len(p.Whitelist) > 0 {
-		if validHost(p.Whitelist, r.URL) {
-			return true
-		}
-		glog.Infof("request is not for an allowed host: %v", r)
-	}
-
-	if len(p.SignatureKey) > 0 {
-		if validSignature(p.SignatureKey, r) {
-			return true
-		}
-		glog.Infof("request contains invalid signature: %v", r)
-	}
-
-	return false
-}
-
-// validHost returns whether the host in u matches one of hosts.
-func validHost(hosts []string, u *url.URL) bool {
-	for _, host := range hosts {
-		if u.Host == host {
-			return true
-		}
-		if strings.HasPrefix(host, "*.") && strings.HasSuffix(u.Host, host[2:]) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// returns whether the referrer from the request is in the host list.
-func validReferrer(hosts []string, r *http.Request) bool {
-	parsed, err := url.Parse(r.Header.Get("Referer"))
-	if err != nil { // malformed or blank header, just deny
-		return false
-	}
-
-	return validHost(hosts, parsed)
-}
-
-// validSignature returns whether the request signature is valid.
-func validSignature(key []byte, r *Request) bool {
-	sig := r.Options.Signature
-	if m := len(sig) % 4; m != 0 { // add padding if missing
-		sig += strings.Repeat("=", 4-m)
-	}
-
-	got, err := base64.URLEncoding.DecodeString(sig)
-	if err != nil {
-		glog.Errorf("error base64 decoding signature %q", r.Options.Signature)
-		return false
-	}
-
-	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(r.URL.String()))
-	want := mac.Sum(nil)
-
-	return hmac.Equal(got, want)
 }
 
 // check304 checks whether we should send a 304 Not Modified in response to
