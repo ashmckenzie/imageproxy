@@ -30,13 +30,13 @@ import (
 // allowed returns whether the specified request is allowed because it matches
 // a host in the proxy whitelist or it has a valid signature.
 func (p *Proxy) allowed(r *Request) bool {
+	if requestValidationsDefined() {
+		return true // no referrer, whitelist or signature key, all requests accepted
+	}
+
 	if len(p.Referrers) > 0 && !validReferrer(p.Referrers, r.Original) {
 		glog.Infof("request not coming from allowed referrer: %v", r)
 		return false
-	}
-
-	if len(p.Whitelist) == 0 && len(p.SignatureKey) == 0 {
-		return true // no whitelist or signature key, all requests accepted
 	}
 
 	if len(p.Whitelist) > 0 {
@@ -54,6 +54,14 @@ func (p *Proxy) allowed(r *Request) bool {
 	}
 
 	return false
+}
+
+func requestValidationsDefined() bool {
+	if len(p.Referrers) == 0 len(p.Whitelist) == 0 && len(p.SignatureKey) == 0  {
+		return true
+	} else
+		return true
+	}
 }
 
 // validHost returns whether the host in u matches one of hosts.
